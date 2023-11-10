@@ -993,53 +993,245 @@ Novamente é necessário verificar no `QGIS` se os campos source e target das li
  
  **Os arquivos `rede_vicosa`, `rede_vicosa_vertices_pgr`, `rede_vicosa_mp` e `rede_vicosa_mp_vertices` estão localizados dentro do banco de dados que pode ser acessado através do dump salvo na pasta `2_DUMP_BANCO_DE_DADOS`.**
 
+#### 10.2. CÁLCULO DA CONECTIVIDADE E ACESSIBILIDADE DA REDE VIÁRIA `(PYTHON)`
 
+Com o arquivo `rede_vicosa_mp` é possível calcular a conectividade da malha viária e sua acessibilidade através do custo entre vértices com função `pgr_dijkstra`. Será calculado a matriz de curso para percorrer todos os nós centrais entre si e esses valores correspondem ao custo de percorrer todos arcos entre si e as acessibilidades são resultados dessa matriz.
 
+Primeiramente é necessario instalar o pacote `pandas` para manipular dataframes dentro do Python. O comando para instalar tal pacote deve ser executado no `promp de comando`:
 
+    pip install pandas
 
+ Os códigos no Jupyter Notebook são os seguintes:
+  
+#### 10.2.1. IMPORTANDO O PACOTE psycopg2 QUE CONECTA O PYTHON COM O POSTGRE-SQL E O PACOTE pandas PARA ORGANIZAR AS TABELAS DE ACESSIBILIDADE
 
+        import psycopg2 as pg
+        import pandas as pd
+        
+#### 10.2.2. CONECTANDO AO BANCO DE DADOS
 
+        con = pg.connect(host='localhost', 
+                        database='dissertacao_v2',
+                        user='postgres', 
+                        password='admin')
+        
+        cur = con.cursor() #CRIANDO UMA INSTÂNCIA PARA EXECUTAR COMANDOS EM SQL
+        
+        # OBS: O servidor hospedado na máquina local será conectado no banco de dados nomeado rede_exemplo, que possui usuário postgres e senha admin.
 
+#### 10.2.3. VENDO QUANTOS ARCOS A MALHA POSSUI
 
+        tabela_grafos = 'rede_vicosa' #TABELA COM A REDE
+        sql = f'select max(id) from {tabela_grafos}' #COMANDO EM SQL A SER EXECUTADO
+        cur.execute(sql) #EXECUTANDO O COMANDO CRIADO
+        dados_consultados = cur.fetchall() #RETORNANDO OS DADOS
+        id_max = e = dados_consultados[0][0] #ID MÁXIMO DA MALHA
 
+#### 10.2.4. VENDO QUANTOS VÉRTICES A MALHA POSSUI
 
+        tabela_vertices = 'rede_vicosa_vertices_pgr' #TABELA COM A REDE
+        sql = f'select max(id) from {tabela_vertices}' #COMANDO EM SQL A SER EXECUTADO
+        cur.execute(sql) #EXECUTANDO O COMANDO CRIADO
+        dados_consultados = cur.fetchall() #RETORNANDO OS DADOS
+        v = dados_consultados[0][0] #ID MÁXIMO DA MALHA
 
+#### 10.2.5. CONECTIVIDADE DA MALHA
 
+        #INDICE ALFA: NÚMERO DE CLICOS DA REDE 'u'
+        #FORMULA:    u = e-v+1
+        #            u_max = 2v-5
+        #            alfa = u/u_max ou (e-v+1) / (2v-5)
+        #            sendo e: numero de linhas; v: numero de vértices
+        
+        #INDICE BETA: SIMPLES RELAÇÃO ENTRE NUMERO DE LINHAS E VÉRTICES
+        #FORMULA:    beta = e / v
+        
+        #INDICE GAMA: RELAÇÃO NUMERO DE LINHAS OBSERVADAS E O NUMERO MÁXIMO DE LINHAS
+        #FORMULA:    gama = e / (3(v-2))
+        
+        alfa = (e-v+1)/(2*v-5)
+        beta = e/v
+        gama = e/(3*(v-2))
+        
+        print(f'No cálculo de conectividade da rede, obtemos os seguintes resultados:\nÍndice Alfa: {alfa:.3f}\nÍndice Beta: {beta:.3f}\nÍndice Gama: {gama:.3f}')
 
+#### 10.2.6. NOME DAS TABELAS COM NÓS INTERMEDIÁRIOS
 
+        #NOME DAS TABELAS E DOS ATRIBUTOS DA CONSULTA:
+        tabela_grafos_acess = 'rede_vicosa_mp' #NOME DE TABELA DA REDE
+        abr_grafos = 'rvmp' #ABREVIAÇÃO PARA A TABELA DA REDE
+        lista_custos = []
 
+#### 10.2.7. LIGAÇÕES ENTRE OS GRAFOS
 
+        for id_i in range(1001, id_max + 1001): #ITERAÇÃO QUE IRÁ PERCORRER TODOS OS GRAFOS COMO VÉRTICE INICIAL
+        
+            lista_custos_i = [] #CRIANDO UMA LISTA VAZIA PARA RECEBER OS CUSTOS DO GRAFO i
+            
+            for id_j in range(1001, id_max + 1001): #ITERAÇÃO QUE IRÁ PERCORRER TODOS OS GRAFOS COMO VÉRTICE FINAL
+                
+                if id_i == id_j: #SE A ITERAÇÃO CALCULAR A DISTANCIA DE UM GRAFO PARA ELE MESMO, PULA A ITERAÇÃO E ADICIONA CUSTO ZERO NA LISTA
+                    lista_custos_i.append(0)
+                    continue
+                
+                else:
+        
+                    sql = f"SELECT sum(djk.cost)/2 as tot_cost FROM pgr_dijkstra('SELECT id, source, target, cost, reverse_cost from {tabela_grafos_acess}', {id_i}, {id_j}, true) as djk JOIN {tabela_grafos_acess} {abr_grafos} ON djk.edge = {abr_grafos}.id;" #COMANDO EM SQL A SER EXECUTADO. SERÁ SELECIONADO O VÉRTICE INICIAL E FINAL DO GRAFO DO OBJETIVO FINAL.
+        
+                    cur.execute(sql) #EXECUTANDO O COMANDO
+        
+                    dados_consultados = cur.fetchall() #RETORNANDO OS DADOS            
+                              
+                    cost = int(dados_consultados[0][0]) #CUSTO ENTRE i E j
+                    
+                    #ADICIONANDO OS DADOS EM UMA LISTA:
+                    lista_custos_i.append(cost) #ADICIONANDO O CUSTO DE ATRAVESSAR DO GRAFO i ATÉ O GRAFO j EM UMA LISTA PROVISÓRIA
+        
+            lista_custos.append(lista_custos_i) #ADICIONANDO A TABELA PROVISIÓRIA ACIMA EM UMA LISTA QUE TERÁ TODAS INFORMAÇÕES
 
+#### 10.2.8. TRANSFORMANDO A LISTA EM TABELA COM O PANDAS
 
+        #CRIANDO UMA MATRIZ A PARTIR DA LISTA ACIMA:
+        matrizCustos = pd.DataFrame(lista_custos)
+        
+        #SUBSTITUINDO O CABEÇALHO E LINHAS QUE ESTÁ INDO DE 0 ATÉ 7 PARA OS NOMES DOS GRAFOS QUE VAI DE A ATÉ H:
+        matrizCustos_ren = matrizCustos #CRIANDO UMA COPIA DA MATRIZ ANTIGA, PARA PRESERVAR A ESTRUTURA ORIGINAL
+        
+        for i in range(0, len(matrizCustos)+1): #ITERAÇÃO PARA SUBSTITUIR O NOME DO CABEÇALHO E DAS LINHAS
+            matrizCustos_ren = matrizCustos_ren.rename(columns={i: f'{i+1}'}, index = {i: f'{i+1}'})
 
+        matrizCustos
+        
+#### 10.2.9. MATRIZ DOS CUSTOS DE ARCO A ARCO
 
+        matrizCustos_ren
 
+#### 10.2.10. ACESSIBILIDADE PELO MÉTODO 1:
 
+        matrizAcess_conectiv = matrizCustos_ren.filter(items=list(map(lambda x: f'{x}', range(1, id_max + 1))))\
+                                                .where(matrizCustos_ren.values == 1) #SELECIONANDO APENAS OS GRAFOS QUE POSSUEM LIGAÇÕES DIRETAS
+        
+        matrizAcess_conectiv = matrizAcess_conectiv.apply(lambda x: x.replace(float('NaN'), 0)) #ATRIBUINDO VALOR ZERO PARA OS GRAFOS SEM LIGAÇÕES DIRETAS
 
+        Acess_1 = matrizAcess_conectiv.sum(axis=1) #SOMA DAS LINHAS DA MATRIZ DE CONECTIVIDADE
+        Acess_1 = pd.DataFrame(Acess_1).rename(columns = {0: 'SOMATÓRIO'}) #CRIANDO UM DATA FRAME PARA RECEBER OS DADOS
 
+        Acess_1
 
+#### 10.2.11.  ACESSIBILIDADE PELO MÉTODO 2:
 
+        Acess_2 = matrizCustos_ren.max() #VALORES MÁXIMOS PARA CADA GRAFO ATÉ O GRAFO MAIS DISTANTE NA REDE (NÚMERO ASSOCIADO)
+        Acess_2 = pd.DataFrame(Acess_2).rename(columns = {0: 'SOMATÓRIO'}) #NÚMERO ASSOCIADO
 
+        Acess_2
 
+#### 10.2.12. ACESSIBILIDADE PELO MÉTODO 3:
 
+        # A ORDEM DE LIGAÇÃO MÁXIMA PODE SER OBTIDADE DA TABELA DO CÁLCULO DO NÚMERO ASSOCIADO, SENDO O VALOR MÁXIMO OBTIDO NO CALCULO DE ACESSIBILIDADE DO MÉTODO 2
+        lig_max = int(Acess_2.max())
+        
+        lista_acess_3 = [] #CRIANDO UMA LISTA QUE RECEBERÁ O SOMATÓRIO DA ACESSIBILIDADE PARA CADA ORDEM
+        
+        for i in range(1, lig_max + 1): #ITERAÇÃO QUE IRÁ PERCORRER DA ORDEM 1 ATÉ A ORDEM MÁXIMA
+            
+            matrizAcess_ordem_i = matrizCustos_ren.filter(items=list(map(lambda x: f'{x}', range(1, id_max + 1))))\
+                                                    .where(matrizCustos_ren.values == i) #SELECIONANDO APENAS OS GRAFOS QUE POSSUEM LIGAÇÕES DE ORDEM i
+            
+            matrizAcess_ordem_i = matrizAcess_ordem_i.apply(lambda x: x.replace(float('NaN'), 0)) #DEFININDO OS VALORES 'NaN' IGUAL A ZERO
+            
+            sumMatrizAcess_ordem_i = matrizAcess_ordem_i.sum(axis=1) #SOMANDO AS LINHAS
+            
+            lista_acess_3.append(list(sumMatrizAcess_ordem_i)) #ADICIONANDO O SOMATÓRIO A LISTA DE ACESSIBILIDADE 3
+        
+        Acess_3 = pd.DataFrame(pd.DataFrame(lista_acess_3).sum()) #DEFININDO ACESSIBILIDADE PELO MÉTODO TRÊS COMO O SOMATÓRIO DE TODAS ACESSIBILIDADES DE ORDEM N
+        
+        #RENOMEANDO AS LINHAS E COLUNAS DESSA MATRIZ:
+        
+        
+        Acess_3 = Acess_3.rename(columns = {0: 'SOMATÓRIO'}) #DEFININDO O NOME DA COLUNA
+        
+        for i in range(0, len(Acess_3)): #ITERAÇÃO PARA SUBSTITUIR DAS LINHAS
+            Acess_3 = Acess_3.rename(index = {i: f'{i+1}'})
 
+        Acess_3
+        
+#### 10.2.13. RESULTADOS:
 
+#### 10.2.13.1. ACESSIBILIDADE MÉTODO 1:
 
+    Acess_1
 
+#### 10.2.13.2. ACESSIBILIDADE MÉTODO 2:
 
+    Acess_2
 
+#### 10.2.13.3. ACESSIBILIDADE MÉTODO 3:
 
+    Acess_3
 
+#### 10.2.14. ADICIONANDO AS ACESSIBILIDADES NA TABELA rede_vicosa:
 
+Para adicionar as acessibilidades na tabela rede_vicosa, primeiramente, deve-se criar novos campos no banco de dados para receber esses dados. O comando em `SQL` que deve ser digitado no `pgAdmin` é o seguinte:
 
+        -- ADICIONANDO CAMPOS NA TABELA 'rede_vicosa' OS CAMPOS PARA ADICONAR A ACESSIBILIDADE DAS VIAS:
+        ALTER TABLE rede_vicosa
+        ADD COLUMN acess_1 REAL,
+        ADD COLUMN acess_2 REAL,
+        ADD COLUMN acess_3 REAL,
+        ADD COLUMN acess_1_norm REAL,
+        ADD COLUMN acess_2_norm REAL,
+        ADD COLUMN acess_3_norm REAL,
+        ADD COLUMN iag REAL;
 
+Após isso, volta-se no `Jupyter Notebook` e executa o seguinte Script Python:
 
+        for id_i in range (1, id_max + 1):
+        
+            sql = f"update {tabela_grafos} set acess_1 = '{Acess_1.values[id_i-1][0]}', acess_2 = '{Acess_2.values[id_i-1][0]}', acess_3 = '{Acess_3.values[id_i-1][0]}' where id = {id_i};" #COMANDO EM SQL A SER EXECUTADO. SERÁ ATRIBUITO A TABELA 'REDE_VICOSA' AS ACESSIBILIDADES DAS VIAS.
+        
+            cur.execute(sql) #EXECUTANDO O COMANDO
+        
+            con.commit() #FINALIZANDO A EXECUÇÃO DO COMANDO
+           
+            print(f'Grafo id {id_i}: Acessibilidade 1: {Acess_1.values[id_i-1][0]}; Acessibilidade 2: {Acess_2.values[id_i-1][0]}; Acessibilidade 3: {Acess_3.values[id_i-1][0]};')
 
+#### 10.2.16. CÁLCULO DO ÍNDICE DE ACESSIBILIDADE TOPOLÓGICA GLOBAL (IATG):
 
+Os três métodos cálculados serão agregados em apenas um, nomeado como IATG. Para isso normalizou/escalonou-se as acessibilidades calculadas para se enquadrarem entre 0 e 1. Após isso, inverteu-se os valores dos métodos 2 e 3 para ficarem compatíveis com o método 1. Por fim, retirou-se a média aritimética dos 3 valores.
 
+#### 10.2.16.1. NORMALIZAÇÃO DA ACESSIBILIDADE PELO MÉTODO 1:
 
+    Acess_1_norm = pd.DataFrame(round((Acess_1['SOMATÓRIO'] - Acess_1['SOMATÓRIO'].min())/(Acess_1['SOMATÓRIO'].max() - Acess_1['SOMATÓRIO'].min()), 3))
+    Acess_1_norm = Acess_1_norm.rename(columns = {'SOMATÓRIO': 'Acess_1_norm'})
 
+#### 10.2.16.2. NORMALIZAÇÃO DA ACESSIBILIDADE PELO MÉTODO 2:
 
+        Acess_2_norm = pd.DataFrame(round((1 - (Acess_2['SOMATÓRIO'] - Acess_2['SOMATÓRIO'].min())/(Acess_2['SOMATÓRIO'].max() - Acess_2['SOMATÓRIO'].min())), 3))
+        Acess_2_norm = Acess_2_norm.rename(columns = {'SOMATÓRIO': 'Acess_2_norm'})
+
+#### 10.2.16.3. NORMALIZAÇÃO DA ACESSIBILIDADE PELO MÉTODO 3:
+
+        Acess_3_norm = pd.DataFrame(round((1-(Acess_3['SOMATÓRIO'] - Acess_3['SOMATÓRIO'].min())/(Acess_3['SOMATÓRIO'].max() - Acess_3['SOMATÓRIO'].min())), 3))
+        Acess_3_norm = Acess_3_norm.rename(columns = {'SOMATÓRIO': 'Acess_3_norm'})
+
+#### 10.2.17. ADICIONANDO OS VALORES OBTIDOS PARA IATG NA TABELA rede_vicosa:
+
+        for id_i in range (1, id_max + 1):
+        
+            sql = f"update {tabela_grafos} set acess_1_norm = '{Acess_1_norm.values[id_i-1][0]}', acess_2_norm = '{Acess_2_norm.values[id_i-1][0]}', acess_3_norm = '{Acess_3_norm.values[id_i-1][0]}', iatg = '{Acess_IATG.values[id_i-1][0]}' where id = {id_i};" #COMANDO EM SQL A SER EXECUTADO. SERÁ ATRIBUITO A TABELA 'REDE_VICOSA' AS ACESSIBILIDADES DAS VIAS.
+        
+            cur.execute(sql) #EXECUTANDO O COMANDO
+        
+            con.commit() #FINALIZANDO A EXECUÇÃO DO COMANDO
+           
+            print(f'Grafo id {id_i}: Acessibilidade 1 norm: {Acess_1_norm.values[id_i-1][0]}; Acessibilidade 2 norm: {Acess_2_norm.values[id_i-1][0]}; Acessibilidade 3 norm: {Acess_3_norm.values[id_i-1][0]}; IATG: {Acess_IATG.values[id_i-1][0]};')
+
+#### 10.2.18. ENCERRANDO A CONEXAO COM O BANCO DE DADOS:
+
+        cur.close()
+        con.close()
+
+### 11. CÁLCULO DA ACESSIBILIDADE PONDERADA PELOS ATRIBUTOS:
 
 
 
