@@ -1335,15 +1335,15 @@ Caso seja de interesse, a mudança da normalização para o atributo pavimentaç
         larg_min = dados_consultados[0][0]
         larg_max = dados_consultados[0][1]
 
-#### 13.3.2.1.1 LARGURA MÍNIMA
+#### 11.3.2.1.1 LARGURA MÍNIMA
 
         larg_min
 
-#### 13.3.2.1.2 LARGURA MÁXIMA
+#### 11.3.2.1.2 LARGURA MÁXIMA
 
         larg_max
 
-#### 13.3.2.2. CRIANDO FUNÇÃO PARA DEFINIR OS PONTOS DE CONTROLE DE ACORDO COM A CLASSIFICAÇÃO DA VIA CONFORME O PLANO DE MOBILIDADE (ATRIBUTO class_pm)
+#### 11.3.2.2. CRIANDO FUNÇÃO PARA DEFINIR OS PONTOS DE CONTROLE DE ACORDO COM A CLASSIFICAÇÃO DA VIA CONFORME O PLANO DE MOBILIDADE (ATRIBUTO class_pm)
 
 Os pontos de controle para a largura foi definido na Dissertação de forma que é variável de acordo com a classificação da via e se ela é de mão única ou dupla. Essa função foi criada para que o usuário digite a classificação conforme o Plano de Mobilidade e se a via é bidirecional ou não, o resultado da função será os pontos de controle escolhidos no trabalho.
 
@@ -1517,7 +1517,7 @@ Os pontos de controle para a largura foi definido na Dissertação de forma que 
 
 Caso seja necessário mudar os pontos de controle ou a forma que ele foi escolhido, essa parte do script deve ser alterado.
 
-#### 13.3.2.3. CRIANDO FUNÇÃO PARA NORMALIZAR O ATRIBUTO LARGURA
+#### 11.3.2.3. CRIANDO FUNÇÃO PARA NORMALIZAR O ATRIBUTO LARGURA
 
 Essa parte do script normalizará a largura do arco. A função criada tem como parâmetros de entrada a largura do arco, se ele é mão única ou dupla e a classificação conforme o Plano de Mobilidade. Os pontos de controle serão calculados com o auxílio da função criada anteriormente e a normalização será realizada.
 
@@ -1539,7 +1539,7 @@ Essa parte do script normalizará a largura do arco. A função criada tem como 
 
 Caso seja escolhido outros parâmetros a serem utilizados, eles devem ser mudados no script acima.
 
-#### 11.3.3. NORMALIZAÇÃO DA LARGURA
+#### 11.3.3. NORMALIZAÇÃO DA DECLIVIDADE
 
 #### 11.3.3.1. INTERVALO DE DECLIVIDADE PRESENTE NA MALHA VIÁRIA EM ESTUDO
 
@@ -1549,15 +1549,15 @@ Caso seja escolhido outros parâmetros a serem utilizados, eles devem ser mudado
         decliv_min = dados_consultados[0][0]
         decliv_max = dados_consultados[0][1]
 
-#### 13.3.3.1.1. DECLIVIDADE MÍNIMA
+#### 11.3.3.1.1. DECLIVIDADE MÍNIMA
 
         decliv_min
 
-#### 13.3.3.1.1. DECLIVIDADE MÁXIMA
+#### 11.3.3.1.2. DECLIVIDADE MÁXIMA
 
         decliv_max
 
-#### 13.3.3.2. CRIANDO FUNÇÃO PARA DEFINIR OS PONTOS DE CONTROLE DE ACORDO COM A CLASSIFICAÇÃO DA VIA CONFORME O PLANO DE MOBILIDADE (ATRIBUTO class_pm)
+#### 11.3.3.2. CRIANDO FUNÇÃO PARA DEFINIR OS PONTOS DE CONTROLE DE ACORDO COM A CLASSIFICAÇÃO DA VIA CONFORME O PLANO DE MOBILIDADE (ATRIBUTO class_pm)
 
 Os pontos de controle para a declividade foi definido na Dissertação de forma que é variável de acordo com a classificação da via. Essa função foi criada para que o usuário digite a classificação conforme o Plano de Mobilidade, o resultado da função será os pontos de controle escolhidos no trabalho.
 
@@ -1589,7 +1589,7 @@ Os pontos de controle para a declividade foi definido na Dissertação de forma 
 
 Caso seja escolhido outros parâmetros a serem utilizados, eles devem ser mudados no script acima.
 
-#### 13.3.3.3. CRIANDO FUNÇÃO PARA NORMALIZAR O ATRIBUTO LARGURA
+#### 11.3.3.3. CRIANDO FUNÇÃO PARA NORMALIZAR O ATRIBUTO DECLIVIDADE
 
 Essa parte do script normalizará a declividade do arco. A função criada tem como parâmetros de entrada a declividade do arco e a classificação conforme o Plano de Mobilidade. Os pontos de controle serão calculados com o auxílio da função criada anteriormente e a normalização será realizada.
 
@@ -1634,9 +1634,9 @@ Essa parte do script normalizará a declividade do arco. A função criada tem c
 
 Caso seja escolhido outros parâmetros a serem utilizados, eles devem ser mudados no script acima.
 
-#### 13.4. ACESSIBILIDADE PARA A SITUAÇÃO 1 DE CONFIGURAÇÕES DE PESO
+#### 11.4. ACESSIBILIDADE PARA A SITUAÇÃO 1 DE CONFIGURAÇÕES DE PESO
 
-#### 13.4.1. DEFININDO OS PESOS (SITUAÇÃO 1)
+#### 11.4.1. DEFININDO OS PESOS (SITUAÇÃO 1)
 
 Primeiramente configurou-se os pesos de acordo com a Situação 1 (largura = 0.5; pavimentação e declividade = 0.25)
 
@@ -1649,7 +1649,7 @@ Primeiramente configurou-se os pesos de acordo com a Situação 1 (largura = 0.5
 
 Caso seja escolhido outros parâmetros a serem utilizados, eles devem ser mudados no script acima.
 
-#### 13.4.2. CÁLCULO DE IAPA (SITUAÇÃO 1)
+#### 11.4.2. CÁLCULO DE IAPA (SITUAÇÃO 1)
 
         #ESTRUTURA DE REPETIÇÃO QUE IRÁ PERCORRER TODAS AS LINHAS:
         for id_i in range(1, id_max +1):
@@ -1739,7 +1739,7 @@ Caso seja escolhido outros parâmetros a serem utilizados, eles devem ser mudado
             con.commit()
             print('IAPA ADICIONADO A TABELA!')    
 
-#### 13.4.3. CÁLCULO DE IATPA (SITUAÇÃO 1)
+#### 11.4.3. CÁLCULO DE IATPA (SITUAÇÃO 1)
 
         #ESTRUTURA DE REPETIÇÃO QUE IRÁ PERCORRER TODAS AS LINHAS:
         for id_i in range(1, id_max +1):
@@ -1775,9 +1775,9 @@ Caso seja escolhido outros parâmetros a serem utilizados, eles devem ser mudado
             con.commit()
             print('IATPA ADICIONADO A TABELA!')    
             
-#### 13.5. ACESSIBILIDADE PARA A SITUAÇÃO 2 DE CONFIGURAÇÕES DE PESO
+#### 11.5. ACESSIBILIDADE PARA A SITUAÇÃO 2 DE CONFIGURAÇÕES DE PESO
 
-#### 13.5.1. DEFININDO OS PESOS (SITUAÇÃO 2)
+#### 11.5.1. DEFININDO OS PESOS (SITUAÇÃO 2)
 
 Agora configurou-se os pesos de acordo com a Situação 2 (largura = 0.375; pavimentação = 0.375 e declividade = 0.25)
 
@@ -1788,7 +1788,7 @@ Agora configurou-se os pesos de acordo com a Situação 2 (largura = 0.375; pavi
         acess_atr = 'iapa_situacao2'
         acess_iatg_atr = 'iatpa_situacao2'
 
-#### 13.5.2. CÁLCULO DE IAPA (SITUAÇÃO 2)
+#### 11.5.2. CÁLCULO DE IAPA (SITUAÇÃO 2)
 
         #ESTRUTURA DE REPETIÇÃO QUE IRÁ PERCORRER TODAS AS LINHAS:
         for id_i in range(1, id_max +1):
@@ -1878,7 +1878,7 @@ Agora configurou-se os pesos de acordo com a Situação 2 (largura = 0.375; pavi
             con.commit()
             print('IAPA ADICIONADO A TABELA!')    
 
-#### 13.5.3. CÁLCULO DE IATPA (SITUAÇÃO 2)
+#### 11.5.3. CÁLCULO DE IATPA (SITUAÇÃO 2)
 
         #ESTRUTURA DE REPETIÇÃO QUE IRÁ PERCORRER TODAS AS LINHAS:
         for id_i in range(1, id_max +1):
@@ -1914,7 +1914,7 @@ Agora configurou-se os pesos de acordo com a Situação 2 (largura = 0.375; pavi
             con.commit()
             print('IATPA ADICIONADO A TABELA!')    
 
-#### 13.6. FECHANDO CONEXÕES
+#### 11.6. FECHANDO CONEXÕES
 
         cur.close()
         con.close()
@@ -1925,7 +1925,7 @@ Os dados completos de acessibilidade para as vias selecionadas para Viçosa est�
 
 Que este tutorial esclareça os passos adotados durante a Dissertação e que seja replicado em outras ocasioões para completar os estudos realizados.
 
-### 14. REFERÊNCIAS
+### 12. REFERÊNCIAS
 
 Todas as referencias podem ser encontradas no documento de texto da minha Dissertação, assim como algumas explicações que julguei serem dispensáveis para este tutorial.
 
