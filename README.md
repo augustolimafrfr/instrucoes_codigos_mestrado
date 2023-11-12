@@ -1001,7 +1001,7 @@ Primeiramente é necessario instalar o pacote `pandas` para manipular dataframes
 
     pip install pandas
 
- Os códigos no Jupyter Notebook são os seguintes:
+ Os códigos no `Jupyter Notebook` são os seguintes:
   
 #### 10.2.1. IMPORTANDO O PACOTE psycopg2 QUE CONECTA O PYTHON COM O POSTGRE-SQL E O PACOTE pandas PARA ORGANIZAR AS TABELAS DE ACESSIBILIDADE
 
@@ -1231,46 +1231,703 @@ Os três métodos cálculados serão agregados em apenas um, nomeado como IATG. 
         cur.close()
         con.close()
 
-### 11. CÁLCULO DA ACESSIBILIDADE PONDERADA PELOS ATRIBUTOS:
+### 11. CÁLCULO DA ACESSIBILIDADE PONDERADA PELOS ATRIBUTOS (IATPA):
 
+O cálculo de IATPA é realizado através da multiplicação de IATG por IAPA (sigla dada ao Índice de Acessibilidade Ponderada pelos Atributos). IAPA é calculado por Análise de Decisão Multicritério através do método_ Weighted Linear Combination_. Para definir a acessibilidade por este método, cada atributo selecionado deve ser normalizado para que se enquadrem entre os valores 0 e 1. Após isso, deve-se multiplicar os atributos normalizados por seus respectividos pesos e somar os valores obtidos.
 
+Os atributos utilizados na Dissertação foram `declividade`, `pavimentação` e `largura da via`. Os critério para a normalização dos atributos estão descritos no **item 3.2.3.2** da Dissertação.
 
+Duas situações de peso foram usadas no trabalho: a Situação 1 considerou que a largura terá peso 0.5, pavimentação 0.25 e declividade 0.25; a Situação 2 considerou que a largura terá peso 0.375, pavimentação 0.375 e declividade 0.25.
 
+Os passos a seguir mostrarão os procedimentos realizados para cálcular IATPA para as configurações usadas na Dissertação, mas todos os parâmetros podem ser alterados de acordo com a intenção de quem reproduzir as metodologias aqui descritas, com o objetivo de se obter novas situações de acessibilidades para Viçosa ou para o município em estudo.
 
+Para essa etapa utilizou-se uma vez o `pgAdmin` para criar os campos necessários para incluir os novos dados que serão criados e após isso, todos os processos foram realizados no `JupyterNotebook`.
 
+#### 11.1. CRIANDO OS CAMPOS NECESSÁRIOS PARA INSERIR OS DADOS (DEVE SER EXECUTADO NO `pgAdmin`).
 
+Será criados os campos para inserir IAPA e IATPA para as duas Situações de pesos propostas.
 
+        -- CRIANDO OS CAMPOS NECESSÁRIOS PARA ACESSIBILIDADE PONDERADA:
+        ALTER TABLE rede_vicosa
+        ADD iapa_situacao1 REAL,
+        ADD itapa_situacao1 REAL,
+        ADD iapa_situacao2 REAL,
+        ADD itapa_situacao2 REAL;
 
+Os códigos no `Jupyter Notebook` são os seguintes:
 
+#### 11.2. IMPORTANDO O PACOTES, CONECTANDO NO BANCO DE DADOS E CALCULANDO O NUMERO DE ARCOS E VÉRTICES DA MALHA VIÁRIA
+  
+#### 11.2.1. IMPORTANDO O PACOTE psycopg2 QUE CONECTA O PYTHON COM O POSTGRE-SQL E O PACOTE pandas PARA ORGANIZAR AS TABELAS DE ACESSIBILIDADE
 
+        import psycopg2 as pg
+        import pandas as pd
+        
+#### 11.2.2. CONECTANDO AO BANCO DE DADOS
 
+        con = pg.connect(host='localhost', 
+                        database='dissertacao_v2',
+                        user='postgres', 
+                        password='admin')
+        
+        cur = con.cursor() #CRIANDO UMA INSTÂNCIA PARA EXECUTAR COMANDOS EM SQL
+        
+        # OBS: O servidor hospedado na máquina local será conectado no banco de dados nomeado rede_exemplo, que possui usuário postgres e senha admin.
 
+#### 11.2.3. VENDO QUANTOS ARCOS A MALHA POSSUI
 
+        tabela_grafos = 'rede_vicosa' #TABELA COM A REDE
+        sql = f'select max(id) from {tabela_grafos}' #COMANDO EM SQL A SER EXECUTADO
+        cur.execute(sql) #EXECUTANDO O COMANDO CRIADO
+        dados_consultados = cur.fetchall() #RETORNANDO OS DADOS
+        id_max = e = dados_consultados[0][0] #ID MÁXIMO DA MALHA
 
+#### 11.2.4. VENDO QUANTOS VÉRTICES A MALHA POSSUI
 
+        tabela_vertices = 'rede_vicosa_vertices_pgr' #TABELA COM A REDE
+        sql = f'select max(id) from {tabela_vertices}' #COMANDO EM SQL A SER EXECUTADO
+        cur.execute(sql) #EXECUTANDO O COMANDO CRIADO
+        dados_consultados = cur.fetchall() #RETORNANDO OS DADOS
+        v = dados_consultados[0][0] #ID MÁXIMO DA MALHA
 
+#### 11.3. NORMALIZAÇÃO DOS ATRIBUTOS
 
+Aqui os três atributos selecionados (pavimentação, largura e declividade) serão normalizados para se enquadrarem entre 0 e 1.
 
+#### 11.3.1. NORMALIZAÇÃO DA PAVIMENTAÇÃO
 
+#### 11.3.1.1 TIPOS DE PAVIMENTAÇÃO PRESENTES NA MALHA VIÁRIA EM ESTUDO
 
+        sql = f'SELECT DISTINCT pavimento FROM vias_atr_pavimento'
+        cur.execute(sql)
+        dados_consultados = cur.fetchall()
+        pavimentos = []
+        for pav in dados_consultados:
+            pavimentos.append(pav[0])
+        pavimentos
+        
+#### 11.3.1.2 PONTOS DE CONTROLE ESCOLHIDOS
 
+Para a pavimentação definiu-se valores específicos para cada uma das possibilidades presentes na malha viária da seguinte forma:
 
+        #FUNÇÃO PARA NORMALIZAR O VALOR DA PAVIMENTAÇÃO. OS PONTOS DE CONTROLE DEVEM SER MODIFICADOS AQUI:
+        def func_pav_norm(pav):
+            if pav == 'terra':
+                return 0.4
+            elif pav == 'asfalto':
+                return 1
+            elif pav == 'pedra fincada':
+                return 0.6
+            elif pav == 'bloquete':
+                return 0.8
+            elif pav == 'paralelepipedo':
+                return 0.8
 
+Caso seja de interesse, a mudança da normalização para o atributo pavimentação deve ser realizado nessa parte do passo-a-passo.
 
+#### 11.3.2. NORMALIZAÇÃO DA LARGURA
 
+#### 11.3.2.1 INTERVALO DE LARGURA PRESENTE NA MALHA VIÁRIA EM ESTUDO
 
+        sql = f'SELECT MIN(largura_media) AS min, MAX(largura_media) AS max FROM {tabela_grafos}'
+        cur.execute(sql)
+        dados_consultados = cur.fetchall()
+        larg_min = dados_consultados[0][0]
+        larg_max = dados_consultados[0][1]
 
+#### 13.3.2.1.1 LARGURA MÍNIMA
 
+        larg_min
 
+#### 13.3.2.1.2 LARGURA MÁXIMA
 
+        larg_max
 
+#### 13.3.2.2. CRIANDO FUNÇÃO PARA DEFINIR OS PONTOS DE CONTROLE DE ACORDO COM A CLASSIFICAÇÃO DA VIA CONFORME O PLANO DE MOBILIDADE (ATRIBUTO class_pm)
 
+Os pontos de controle para a largura foi definido na Dissertação de forma que é variável de acordo com a classificação da via e se ela é de mão única ou dupla. Essa função foi criada para que o usuário digite a classificação conforme o Plano de Mobilidade e se a via é bidirecional ou não, o resultado da função será os pontos de controle escolhidos no trabalho.
 
+        def func_larg_faixas(class_pm, oneway):
+            
+            #CONFIGURANDO UMA MENSAGEM DE ERRO CASO NÃO DIGITE O VALOR DE ONEWAY CERTO
+            #SÓ É PERMITIDO 'YES' OU 'NO', EM CAIXA ALTA. 'No', 'no', 'Yes', 'YeS' OU QUALQUER OUTRO VALOR GERARÃO ERROS.
+            if oneway != 'YES' and oneway != 'NO':
+                raise ValueError("Valor de oneway inválido!")
+                
+            elif class_pm not in ['CEs', 'CPs', 'CSs', 'CLs 1', 'CLs 2', 'CLs 3', 'Simulacao', 'Anel Viario','Conexoes']:
+                raise ValueError("Valor de class_pm inválido!")
+                
+            else:
+                
+                #SE A CLASSE FOR CEs CONSIDERAR VIA ARTERIAL:
+                if class_pm in ['CEs', 'Anel Viario']:
+                    
+                    #FAIXAS DE ROLAMENTO DE ACORDO COM A TABELA DA NORMA:
+        
+                    larg_rua_desej = 3.5
+        
+                    larg_acost_desej = 3 + 0.6
+        
+                    if oneway == 'NO':
+        
+                        #FAIXA SUPERIOR PARA LARGURA
+                        larg_sup = 2*larg_rua_desej + 2*larg_acost_desej
+        
+                        #FAIXA INFERIOR PARA LARGURA
+                        larg_inf = 2*larg_rua_desej
+        
+                        #FAIXA SUPERIOR PARA A LARGURA NORMALIZADA
+                        larg_norm_sup = 1
+        
+                        #FAIXA INFERIOR PARA A LARGURA NORMALIZADA
+                        larg_norm_inf = 0.5
+        
+                        #DIFERENÇA DE LARGURA
+                        larg_dif = larg_sup - larg_inf
+        
+                        #DIFERENÇA DE LARGURA NORMALIZADA
+                        larg_norm_dif = larg_norm_sup - larg_norm_inf
+        
+                    else:
+        
+                        #FAIXA SUPERIOR PARA LARGURA
+                        larg_sup = larg_rua_desej + larg_acost_desej
+        
+                        #FAIXA INFERIOR PARA LARGURA
+                        larg_inf = larg_rua_desej
+        
+                        #FAIXA SUPERIOR PARA A LARGURA NORMALIZADA
+                        larg_norm_sup = 1
+        
+                        #FAIXA INFERIOR PARA A LARGURA NORMALIZADA
+                        larg_norm_inf = 0.5
+        
+                        #DIFERENÇA DE LARGURA
+                        larg_dif = larg_sup - larg_inf
+        
+                        #DIFERENÇA DE LARGURA NORMALIZADA
+                        larg_norm_dif = larg_norm_sup - larg_norm_inf
+                    
+                
+                # SE A CLASSE FOR CORREDORES PRINCIPAIS, SECUNDARIOS, LOCAIS OU ALGUMA VIA DE SIMULAÇÃO CONSIDERAR VIA COLETORA:
+                elif class_pm in ['CPs']:
+                    
+                    #FAIXAS DE ROLAMENTO DE ACORDO COM A TABELA DA NORMA:
+                    
+                    larg_rua_desej = 3.5
+                    
+                    larg_est_desej = 3
+                    
+                    if oneway == 'NO':
+                        
+                        #FAIXA SUPERIOR PARA LARGURA
+                        larg_sup = 2*larg_rua_desej + 2*larg_est_desej
+        
+                        #FAIXA INFERIOR PARA LARGURA
+                        larg_inf = 2*larg_rua_desej
+        
+                        #FAIXA SUPERIOR PARA A LARGURA NORMALIZADA
+                        larg_norm_sup = 1
+        
+                        #FAIXA INFERIOR PARA A LARGURA NORMALIZADA
+                        larg_norm_inf = 0.5
+        
+                        #DIFERENÇA DE LARGURA
+                        larg_dif = larg_sup - larg_inf
+        
+                        #DIFERENÇA DE LARGURA NORMALIZADA
+                        larg_norm_dif = larg_norm_sup - larg_norm_inf
+                    
+                    else:
+                        
+                        #FAIXA SUPERIOR PARA LARGURA
+                        larg_sup = larg_rua_desej + larg_est_desej
+        
+                        #FAIXA INFERIOR PARA LARGURA
+                        larg_inf = larg_rua_desej
+        
+                        #FAIXA SUPERIOR PARA A LARGURA NORMALIZADA
+                        larg_norm_sup = 1
+        
+                        #FAIXA INFERIOR PARA A LARGURA NORMALIZADA
+                        larg_norm_inf = 0.5
+        
+                        #DIFERENÇA DE LARGURA
+                        larg_dif = larg_sup - larg_inf
+        
+                        #DIFERENÇA DE LARGURA NORMALIZADA
+                        larg_norm_dif = larg_norm_sup - larg_norm_inf
+                    
+                # SE A CLASSE FOR CONEXAO CONSIDERAR VIA LOCAL:
+                elif class_pm in ['Conexoes', 'CSs', 'CLs 1', 'CLs 2', 'CLs 3', 'Simulacao']:
+                    
+                    #FAIXAS DE ROLAMENTO DE ACORDO COM A TABELA DA NORMA:
+                    
+                    larg_rua_desej = 3.3
+                    
+                    larg_est_desej = 2.5
+                    
+                    if oneway =='NO':
+                        
+                        #FAIXA SUPERIOR PARA LARGURA
+                        larg_sup = 2*larg_rua_desej + 2*larg_est_desej
+        
+                        #FAIXA INFERIOR PARA LARGURA
+                        larg_inf = 2*larg_rua_desej
+        
+                        #FAIXA SUPERIOR PARA A LARGURA NORMALIZADA
+                        larg_norm_sup = 1
+        
+                        #FAIXA INFERIOR PARA A LARGURA NORMALIZADA
+                        larg_norm_inf = 0.5
+        
+                        #DIFERENÇA DE LARGURA
+                        larg_dif = larg_sup - larg_inf
+        
+                        #DIFERENÇA DE LARGURA NORMALIZADA
+                        larg_norm_dif = larg_norm_sup - larg_norm_inf
+                    
+                    else:
+                        
+                        #FAIXA SUPERIOR PARA LARGURA
+                        larg_sup = larg_rua_desej + larg_est_desej
+        
+                        #FAIXA INFERIOR PARA LARGURA
+                        larg_inf = larg_rua_desej
+        
+                        #FAIXA SUPERIOR PARA A LARGURA NORMALIZADA
+                        larg_norm_sup = 1
+        
+                        #FAIXA INFERIOR PARA A LARGURA NORMALIZADA
+                        larg_norm_inf = 0.5
+        
+                        #DIFERENÇA DE LARGURA
+                        larg_dif = larg_sup - larg_inf
+        
+                        #DIFERENÇA DE LARGURA NORMALIZADA
+                        larg_norm_dif = larg_norm_sup - larg_norm_inf
+            
+            #RETORNANDO OS VALORES ENCONTRADOS EM UM DICIONÁRIO:
+            return {'larg_inf': larg_inf,
+                    'larg_sup': larg_sup,
+                    'larg_norm_inf': larg_norm_inf,
+                    'larg_norm_sup': larg_norm_sup,
+                    'larg_dif': larg_dif,
+                    'larg_norm_dif': larg_norm_dif}
 
+Caso seja necessário mudar os pontos de controle ou a forma que ele foi escolhido, essa parte do script deve ser alterado.
 
+#### 13.3.2.3. CRIANDO FUNÇÃO PARA NORMALIZAR O ATRIBUTO LARGURA
 
+Essa parte do script normalizará a largura do arco. A função criada tem como parâmetros de entrada a largura do arco, se ele é mão única ou dupla e a classificação conforme o Plano de Mobilidade. Os pontos de controle serão calculados com o auxílio da função criada anteriormente e a normalização será realizada.
 
+        #FUNÇÃO PARA NORMALIZAR A LARGURA:
+        def func_larg_norm(larg, oneway, class_pm):
+            
+            #CRIANDO UM DICIONÁRIO COM OS PONTOS DE CONTROLE DEFINIDOS NA FUNÇÃO ANTERIOR:
+            dict_faixas = func_larg_faixas(class_pm, oneway)
+            
+            #RETORNANDO O VALOR NORMALIZADO
+            if larg >  dict_faixas['larg_sup']:
+                return 1
+            
+            elif larg < dict_faixas['larg_inf']:
+                return 0.5
+            
+            else:
+                return (((larg - dict_faixas['larg_inf'])*dict_faixas['larg_norm_dif'])/dict_faixas['larg_dif']) + dict_faixas['larg_norm_inf']
 
+Caso seja escolhido outros parâmetros a serem utilizados, eles devem ser mudados no script acima.
+
+#### 11.3.3. NORMALIZAÇÃO DA LARGURA
+
+#### 11.3.3.1. INTERVALO DE DECLIVIDADE PRESENTE NA MALHA VIÁRIA EM ESTUDO
+
+        sql = f'SELECT MIN(declividade_media_abs) AS min, MAX(declividade_media_abs) AS max FROM {tabela_grafos}'
+        cur.execute(sql)
+        dados_consultados = cur.fetchall()
+        decliv_min = dados_consultados[0][0]
+        decliv_max = dados_consultados[0][1]
+
+#### 13.3.3.1.1. DECLIVIDADE MÍNIMA
+
+        decliv_min
+
+#### 13.3.3.1.1. DECLIVIDADE MÁXIMA
+
+        decliv_max
+
+#### 13.3.3.2. CRIANDO FUNÇÃO PARA DEFINIR OS PONTOS DE CONTROLE DE ACORDO COM A CLASSIFICAÇÃO DA VIA CONFORME O PLANO DE MOBILIDADE (ATRIBUTO class_pm)
+
+Os pontos de controle para a declividade foi definido na Dissertação de forma que é variável de acordo com a classificação da via. Essa função foi criada para que o usuário digite a classificação conforme o Plano de Mobilidade, o resultado da função será os pontos de controle escolhidos no trabalho.
+
+        def func_decliv_faixas(class_pm):
+            
+            #CONFIGURANDO UMA MENSAGEM DE ERRO CASO NÃO DIGITE O VALOR DE CLASS PM CERTO.
+            if class_pm not in ['CEs', 'CPs', 'CSs', 'CLs 1', 'CLs 2', 'CLs 3', 'Simulacao', 'Anel Viario', 'Conexoes']:
+                raise ValueError("Valor de class_pm inválido!")
+                
+            else:        
+                #SE A CLASSE FOR CEs CONSIDERAR VIA ARTERIAL:
+                if class_pm in ['CEs', 'Anel Viario']:
+                    rampa_desej = 4
+                    rampa_abs = 11
+                
+                # SE A CLASSE FOR CORREDORES PRINCIPAIS, SECUNDARIOS, LOCAIS OU ALGUMA VIA DE SIMULAÇÃO CONSIDERAR VIA COLETORA:
+                elif class_pm in ['CPs']:
+                    rampa_desej = 5
+                    rampa_abs = 12
+                    
+                # SE A CLASSE FOR CONEXAO CONSIDERAR VIA LOCAL:
+                elif class_pm in ['Conexoes', 'CSs', 'CLs 1', 'CLs 2', 'CLs 3', 'Simulacao']:
+                    rampa_desej = 6
+                    rampa_abs = 15
+            
+            #RETORNANDO OS VALORES ENCONTRADOS EM UM DICIONÁRIO:
+            return {'rampa_desej': rampa_desej,
+                    'rampa_abs': rampa_abs}
+
+Caso seja escolhido outros parâmetros a serem utilizados, eles devem ser mudados no script acima.
+
+#### 13.3.3.3. CRIANDO FUNÇÃO PARA NORMALIZAR O ATRIBUTO LARGURA
+
+Essa parte do script normalizará a declividade do arco. A função criada tem como parâmetros de entrada a declividade do arco e a classificação conforme o Plano de Mobilidade. Os pontos de controle serão calculados com o auxílio da função criada anteriormente e a normalização será realizada.
+
+        #FUNÇÃO PARA NORMALIZAR A DECLIVIDADE. OS PONTOS DE CONTROLE DEVEM SER MODIFICADOS AQUI:
+        def func_decliv_norm(decliv, class_pm):
+            
+            dict_decliv = func_decliv_faixas(class_pm)
+            
+            #SE A DECLIVIDADE FOR MENOR QUE ZERO APARECERÁ UMA MENSAGEM DE ERRO
+            if decliv < 0:
+                raise ValueError("Valor de declividade menor que zero")
+                
+            elif decliv > 18:
+                return 0
+            
+            #SE A DECLIVIDADE FOR MENOR QUE 5
+            elif decliv <= dict_decliv['rampa_desej']:
+                return 1
+            
+            #SE A DECCLIVIDADE ESTIVER ENTRE A RAMPA DESEJAVEL E A ABSOLUTA
+            elif decliv > dict_decliv['rampa_desej'] and decliv <= dict_decliv['rampa_abs']:       
+                
+                decliv_norm_sup = 1
+                decliv_norm_inf = 0.5
+                decliv_norm_dif = decliv_norm_sup - decliv_norm_inf
+                decliv_sup = dict_decliv['rampa_abs']
+                decliv_inf = dict_decliv['rampa_desej']
+                decliv_dif = decliv_sup - decliv_inf      
+        
+            #SE A DECLIVIDADE ESTIVER ENTRE A RAMPA ABSOLUTA E O VALOR MÁXIMO DE 18%:
+            elif decliv > dict_decliv['rampa_abs'] and decliv < 18:
+                
+                decliv_norm_sup = 0.5
+                decliv_norm_inf = 0
+                decliv_norm_dif = decliv_norm_sup - decliv_norm_inf
+                decliv_sup = 18
+                decliv_inf = dict_decliv['rampa_abs']
+                decliv_dif = decliv_sup - decliv_inf
+            
+            #RETORNANDO O VALOR NORMALIZADO DA DECLIVIDADE
+            return (((decliv_norm_dif)*(decliv_sup - decliv))/(decliv_dif)) + decliv_norm_inf
+
+Caso seja escolhido outros parâmetros a serem utilizados, eles devem ser mudados no script acima.
+
+#### 13.4. ACESSIBILIDADE PARA A SITUAÇÃO 1 DE CONFIGURAÇÕES DE PESO
+
+#### 13.4.1. DEFININDO OS PESOS (SITUAÇÃO 1)
+
+Primeiramente configurou-se os pesos de acordo com a Situação 1 (largura = 0.5; pavimentação e declividade = 0.25)
+
+        # PESO DOS ATRIBUTOS NA SEGUINTE ORDEM: PAVIMENTAÇÃO, LARGURA MÉDIA, DECLIVIDADE MÉDIA
+        pesos = [0.25, 0.5, 0.25]
+        
+        # NOME DA COLUNA QUE SERÁ ADICIONADA A ACESSIBILIDADE DOS ATRIBUTOS E A ACESSIBILIDADE TOPOLOGICA PONDERADA
+        acess_atr = 'iapa_situacao1'
+        acess_iatg_atr = 'iatpa_situacao1'
+
+Caso seja escolhido outros parâmetros a serem utilizados, eles devem ser mudados no script acima.
+
+#### 13.4.2. CÁLCULO DE IAPA (SITUAÇÃO 1)
+
+        #ESTRUTURA DE REPETIÇÃO QUE IRÁ PERCORRER TODAS AS LINHAS:
+        for id_i in range(1, id_max +1):
+            
+            #CONSULTANDO AS PROPRIEDADES DA LINHA DE id_i
+            sql = f'SELECT pavimento, comp_pavimento, class_pm, comp_class_pm, largura_media, declividade_media_abs, comp_via, oneway FROM {tabela_grafos} WHERE id = {id_i}' 
+        
+            #EXECUTANDO O COMANDO CRIADO
+            cur.execute(sql) 
+        
+            #RETORNANDO OS DADOS
+            dados_consultados = cur.fetchall()
+        
+            #PAVIMENTAÇÃO DA LINHA i
+            pav_i = dados_consultados[0][0].split('; ')
+        
+            #COMPRIMENTO DE CADA PAVIMENTAÇÃO DA LINHA i
+            comp_pav_i = dados_consultados[0][1].split('; ')
+        
+            #CLASSE DA LINHA i
+            class_pm_i = dados_consultados[0][2].split('; ')
+        
+            #COMPRIMENTO DE CADA PAVIMENTAÇÃO DA LINHA i
+            comp_class_pm_i = dados_consultados[0][3].split('; ')
+        
+            #LARGURA MEDIA DA LINHA i
+            larg_media_i = dados_consultados[0][4]
+        
+            #DECLIVIDADE MÉDIA DA LINHA i
+            decliv_media_i = dados_consultados[0][5]
+        
+            #COMPRIMENTO TOTAL DA LINHA
+            comp_via_i = dados_consultados[0][6]
+        
+            #SENTIDO DA VIA DA LINHA i
+            oneway_i = dados_consultados[0][7]
+        
+            ######### NORMALIZANDO O VALOR DE PAVIMENTAÇÃO #########
+            #COMO PODE EXISTIR DIVERSAS PAVIMENTAÇÕES NA LINHA, SERÁ REALIZADO UMA MÉDIA PONDERADA DOS VALORES NORMALIZADOS:
+        
+            #CRIANDO A VARIÁVEL PAVIMENTO NORMALIZADO
+            pav_norm_i = 0
+        
+            #ESTRUTURA DE REPETIÇÃO PARA PERCORRER A VARIAVEL pav_i E CALCULAR A PAVIMENTAÇÃO NORMALIZADA
+            for p in range(0, len(pav_i)):
+                pav_norm_i = pav_norm_i + func_pav_norm(pav_i[p])*float(comp_pav_i[p])
+        
+            pav_norm_i = pav_norm_i/float(comp_via_i)   
+        
+        
+            ######### NORMALIZANDO O VALOR DE LARGURA E DECLIVIDADE #########
+        
+            #CRIANDO A VARIÁVEL LARGURA NORMALIZADA E DECLIVIDADE NORMALIZADA  
+            larg_norm_i = 0
+            decliv_norm_i = 0
+        
+            #ESTRUTURA DE REPETIÇÃO PARA PERCORRER TODAS AS CLASSIFICAÇÕES QUE ESTA LINHA POSSUI:
+            for c in range(0, len(class_pm_i)):
+        
+                #LARGURA:
+                larg_norm_i = larg_norm_i + func_larg_norm(larg_media_i, oneway_i, class_pm_i[c])*float(comp_class_pm_i[c])
+        
+                #DECLIVIDADE
+                decliv_norm_i = decliv_norm_i + func_decliv_norm(decliv_media_i, class_pm_i[c])*float(comp_class_pm_i[c])
+        
+            #DIVIDINDO PELA SOMA DOS PESOS (COMPRIMENTO DA LINHA)
+            larg_norm_i = larg_norm_i/float(comp_via_i)
+        
+            decliv_norm_i = decliv_norm_i/float(comp_via_i)
+            
+        
+            ##### ACESSIBILIDADE DOS ATRIBUTOS ####
+        
+            acess_i = round(pesos[0]*pav_norm_i + pesos[1]*larg_norm_i + pesos[2]*decliv_norm_i, 3)
+            
+            #MOSTRANDO OS RESULTADOS
+            print('----------')
+            print(f'ID: {id_i}: Pav: {pav_norm_i}, Larg: {larg_norm_i}, Decliv: {decliv_norm_i}. ACESS: {acess_i}')
+            
+            #ADICIONANDO A ACESSIBILIDADE A TABELA:
+            sql = f'UPDATE {tabela_grafos} SET {acess_atr} = {acess_i} WHERE id = {id_i}'
+            
+            #EXECUTANDO O COMANDO
+            cur.execute(sql)
+            
+            #FINALIZANDO A EXECUÇÃO DO COMANDO
+            con.commit()
+            print('IAPA ADICIONADO A TABELA!')    
+
+#### 13.4.3. CÁLCULO DE IATPA (SITUAÇÃO 1)
+
+        #ESTRUTURA DE REPETIÇÃO QUE IRÁ PERCORRER TODAS AS LINHAS:
+        for id_i in range(1, id_max +1):
+            
+            #CONSULTANDO AS PROPRIEDADES DA LINHA DE id_i
+            sql = f'SELECT iatg, {acess_atr} FROM {tabela_grafos} WHERE id = {id_i}' 
+        
+            #EXECUTANDO O COMANDO CRIADO
+            cur.execute(sql) 
+        
+            #RETORNANDO OS DADOS
+            dados_consultados = cur.fetchall()
+        
+            #ADICIONANDO OS DADOS CONSULTADOS A VARIÁVEIS
+            iatg_i = dados_consultados[0][0]
+        
+            iapa_i = dados_consultados[0][1]
+        
+            #ACESSIBILIDADE TOPOLÓGICA PONDERADA:
+            acess_pond_i = round(iatg_i*iapa_i, 3)
+        
+            #MOSTRANDO OS RESULTADOS
+            print('----------')
+            print(f'ID: {id_i}: {iatg_i} x {iapa_i} = {acess_pond_i}')
+        
+            #ATUALIZANDO A TABELA DA REDE COM OS VALORES DA ACESSIBILIDADE TOPOLÓGICA PONDERADA PELOS ATRIBUTOS:
+            sql = f'UPDATE {tabela_grafos} SET {acess_iatg_atr} = {acess_pond_i} WHERE id = {id_i}'
+        
+            #EXECUTANDO O COMANDO
+            cur.execute(sql)
+        
+            #FINALIZANDO A EXECUÇÃO DO COMANDO
+            con.commit()
+            print('IATPA ADICIONADO A TABELA!')    
+            
+#### 13.5. ACESSIBILIDADE PARA A SITUAÇÃO 2 DE CONFIGURAÇÕES DE PESO
+
+#### 13.5.1. DEFININDO OS PESOS (SITUAÇÃO 2)
+
+Agora configurou-se os pesos de acordo com a Situação 2 (largura = 0.375; pavimentação = 0.375 e declividade = 0.25)
+
+        # PESO DOS ATRIBUTOS NA SEGUINTE ORDEM: PAVIMENTAÇÃO, LARGURA MÉDIA, DECLIVIDADE MÉDIA
+        pesos = [0.375, 0.375, 0.25]
+        
+        # NOME DA COLUNA QUE SERÁ ADICIONADA A ACESSIBILIDADE DOS ATRIBUTOS E A ACESSIBILIDADE TOPOLOGICA PONDERADA
+        acess_atr = 'iapa_situacao2'
+        acess_iatg_atr = 'iatpa_situacao2'
+
+#### 13.5.2. CÁLCULO DE IAPA (SITUAÇÃO 2)
+
+        #ESTRUTURA DE REPETIÇÃO QUE IRÁ PERCORRER TODAS AS LINHAS:
+        for id_i in range(1, id_max +1):
+            
+            #CONSULTANDO AS PROPRIEDADES DA LINHA DE id_i
+            sql = f'SELECT pavimento, comp_pavimento, class_pm, comp_class_pm, largura_media, declividade_media_abs, comp_via, oneway FROM {tabela_grafos} WHERE id = {id_i}' 
+        
+            #EXECUTANDO O COMANDO CRIADO
+            cur.execute(sql) 
+        
+            #RETORNANDO OS DADOS
+            dados_consultados = cur.fetchall()
+        
+            #PAVIMENTAÇÃO DA LINHA i
+            pav_i = dados_consultados[0][0].split('; ')
+        
+            #COMPRIMENTO DE CADA PAVIMENTAÇÃO DA LINHA i
+            comp_pav_i = dados_consultados[0][1].split('; ')
+        
+            #CLASSE DA LINHA i
+            class_pm_i = dados_consultados[0][2].split('; ')
+        
+            #COMPRIMENTO DE CADA PAVIMENTAÇÃO DA LINHA i
+            comp_class_pm_i = dados_consultados[0][3].split('; ')
+        
+            #LARGURA MEDIA DA LINHA i
+            larg_media_i = dados_consultados[0][4]
+        
+            #DECLIVIDADE MÉDIA DA LINHA i
+            decliv_media_i = dados_consultados[0][5]
+        
+            #COMPRIMENTO TOTAL DA LINHA
+            comp_via_i = dados_consultados[0][6]
+        
+            #SENTIDO DA VIA DA LINHA i
+            oneway_i = dados_consultados[0][7]
+        
+            ######### NORMALIZANDO O VALOR DE PAVIMENTAÇÃO #########
+            #COMO PODE EXISTIR DIVERSAS PAVIMENTAÇÕES NA LINHA, SERÁ REALIZADO UMA MÉDIA PONDERADA DOS VALORES NORMALIZADOS:
+        
+            #CRIANDO A VARIÁVEL PAVIMENTO NORMALIZADO
+            pav_norm_i = 0
+        
+            #ESTRUTURA DE REPETIÇÃO PARA PERCORRER A VARIAVEL pav_i E CALCULAR A PAVIMENTAÇÃO NORMALIZADA
+            for p in range(0, len(pav_i)):
+                pav_norm_i = pav_norm_i + func_pav_norm(pav_i[p])*float(comp_pav_i[p])
+        
+            pav_norm_i = pav_norm_i/float(comp_via_i)   
+        
+        
+            ######### NORMALIZANDO O VALOR DE LARGURA E DECLIVIDADE #########
+        
+            #CRIANDO A VARIÁVEL LARGURA NORMALIZADA E DECLIVIDADE NORMALIZADA  
+            larg_norm_i = 0
+            decliv_norm_i = 0
+        
+            #ESTRUTURA DE REPETIÇÃO PARA PERCORRER TODAS AS CLASSIFICAÇÕES QUE ESTA LINHA POSSUI:
+            for c in range(0, len(class_pm_i)):
+        
+                #LARGURA:
+                larg_norm_i = larg_norm_i + func_larg_norm(larg_media_i, oneway_i, class_pm_i[c])*float(comp_class_pm_i[c])
+        
+                #DECLIVIDADE
+                decliv_norm_i = decliv_norm_i + func_decliv_norm(decliv_media_i, class_pm_i[c])*float(comp_class_pm_i[c])
+        
+            #DIVIDINDO PELA SOMA DOS PESOS (COMPRIMENTO DA LINHA)
+            larg_norm_i = larg_norm_i/float(comp_via_i)
+        
+            decliv_norm_i = decliv_norm_i/float(comp_via_i)
+            
+        
+            ##### ACESSIBILIDADE DOS ATRIBUTOS ####
+        
+            acess_i = round(pesos[0]*pav_norm_i + pesos[1]*larg_norm_i + pesos[2]*decliv_norm_i, 3)
+            
+            #MOSTRANDO OS RESULTADOS
+            print('----------')
+            print(f'ID: {id_i}: Pav: {pav_norm_i}, Larg: {larg_norm_i}, Decliv: {decliv_norm_i}. ACESS: {acess_i}')
+            
+            #ADICIONANDO A ACESSIBILIDADE A TABELA:
+            sql = f'UPDATE {tabela_grafos} SET {acess_atr} = {acess_i} WHERE id = {id_i}'
+            
+            #EXECUTANDO O COMANDO
+            cur.execute(sql)
+            
+            #FINALIZANDO A EXECUÇÃO DO COMANDO
+            con.commit()
+            print('IAPA ADICIONADO A TABELA!')    
+
+#### 13.5.3. CÁLCULO DE IATPA (SITUAÇÃO 2)
+
+        #ESTRUTURA DE REPETIÇÃO QUE IRÁ PERCORRER TODAS AS LINHAS:
+        for id_i in range(1, id_max +1):
+            
+            #CONSULTANDO AS PROPRIEDADES DA LINHA DE id_i
+            sql = f'SELECT iatg, {acess_atr} FROM {tabela_grafos} WHERE id = {id_i}' 
+        
+            #EXECUTANDO O COMANDO CRIADO
+            cur.execute(sql) 
+        
+            #RETORNANDO OS DADOS
+            dados_consultados = cur.fetchall()
+        
+            #ADICIONANDO OS DADOS CONSULTADOS A VARIÁVEIS
+            iatg_i = dados_consultados[0][0]
+        
+            iapa_i = dados_consultados[0][1]
+        
+            #ACESSIBILIDADE TOPOLÓGICA PONDERADA:
+            acess_pond_i = round(iatg_i*iapa_i, 3)
+        
+            #MOSTRANDO OS RESULTADOS
+            print('----------')
+            print(f'ID: {id_i}: {iatg_i} x {iapa_i} = {acess_pond_i}')
+        
+            #ATUALIZANDO A TABELA DA REDE COM OS VALORES DA ACESSIBILIDADE TOPOLÓGICA PONDERADA PELOS ATRIBUTOS:
+            sql = f'UPDATE {tabela_grafos} SET {acess_iatg_atr} = {acess_pond_i} WHERE id = {id_i}'
+        
+            #EXECUTANDO O COMANDO
+            cur.execute(sql)
+        
+            #FINALIZANDO A EXECUÇÃO DO COMANDO
+            con.commit()
+            print('IATPA ADICIONADO A TABELA!')    
+
+#### 13.6. FECHANDO CONEXÕES
+
+        cur.close()
+        con.close()
+
+Após esses procedimentos o cálculo das acessibilidades através de IATPA foi concluido para as duas Situações de peso selecionadas.
+
+Os dados completos de acessibilidade para as vias selecionadas para Viçosa está no banco de dados que pode ser restaurado através do arquivo que se encontra na pasta `2_DUMP_BANCO_DE_DADOS`, assim como a das demais malhas viárias estudadas, mas que não estão nesse tutorial.
+
+Que este tutorial esclareça os passos adotados durante a Dissertação e que seja replicado em outras ocasioões para completar os estudos realizados.
+
+### 14. REFERÊNCIAS
+
+Todas as referencias podem ser encontradas no documento de texto da minha Dissertação, assim como algumas explicações que julguei serem dispensáveis para este tutorial.
 
 
 
