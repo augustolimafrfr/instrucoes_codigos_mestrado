@@ -16,7 +16,7 @@ Linguaguem de programação: `Python 3` (juntamente com a IDE _Jupyter Notebook_
 
 **OBS.: ESSE TUTORIAL EXPLICARÁ TODO O PROCEDIMENTO DE PREPARAÇÃO, ORGANIZAÇÃO E TRANSFORMAÇÃO DOS DADOS E CÁLCULO DA CONECTIVIDADE E ACESSIBILIDADE (IATG e IATPA) PARA AS PRINCIPAIS VIAS DE VIÇOSA. NA DISSERTAÇÃO ANALISOU-SE NOVE MALHAS VIÁRIAS (A ATUAL MALHA VIÁRIA DE VIÇOSA E OITO MALHAS DERIVADAS DE PROPOSTAS DE INTERVENÇÕES NA REDE), PORÉM OS PROCEDIMENTOS PARA O CÁLCULO DE ALFA, BETA, GAMA, IATG E IATPA PARA TODAS ELAS SÃO SEMELHANTES.LOGO, TODOS OS PROCESSOS AQUI EXPLICADOS PARA A _REDE 1_ (PRINCIPAIS VIAS DE VIÇOSA SEM PROPOSTAS DE INTERVENÇÕES) PODEM SER REPLICADO PARA AS DEMAIS.**
 
-Os arquivos em SQL, Python e principais shapefiles utilizados estão disponíveis para download nesta página no GitHub.
+Os arquivos em SQL, Python e principais shapefiles utilizados estão disponíveis para download neste link: https://drive.google.com/drive/folders/1aAdK5Eu6Fgvh_8o8w_IIiTzmXrQx89Sc?usp=sharing
 
 ## PASSO-A-PASSO:
 
